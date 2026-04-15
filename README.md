@@ -1,6 +1,6 @@
-# Torn Smart Fill Stock
+# Torn Smart Stock
 
-A Tampermonkey userscript that adds a **Smart Fill** button to the Torn Companies stock page.
+A simple Tampermonkey userscript that adds a **Smart Fill** button to a Torn Company's stock page.
 
 It automatically allocates storage space based on **demand, stock levels, and priority weighting**, helping prevent stockouts and optimize inventory flow.
 
