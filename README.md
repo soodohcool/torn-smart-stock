@@ -4,8 +4,6 @@ A Tampermonkey userscript that adds a **Smart Fill** button to the Torn Companie
 
 It automatically allocates storage space based on **demand, stock levels, and priority weighting**, helping prevent stockouts and optimize inventory flow.
 
----
-
 ## Features
 
 - Adds a **Smart Fill** button to the stock page
@@ -15,8 +13,6 @@ It automatically allocates storage space based on **demand, stock levels, and pr
   - High daily sales items
 - Respects total storage capacity
 - Works instantly on page load (no configuration needed)
-
----
 
 ## How It Works
 
@@ -28,16 +24,12 @@ The script calculates:
 
 Then distributes stock intelligently instead of blindly filling everything evenly.
 
----
-
 ## Installation
 
 1. Install **Tampermonkey** (browser extension)
 2. Create a new script
 3. Paste in the userscript code
 4. Save
-
----
 
 ## Usage
 
@@ -46,8 +38,6 @@ Then distributes stock intelligently instead of blindly filling everything evenl
 3. The script automatically fills order quantities
 4. Click **Place Order** as usual
 
----
-
 ## Strategy
 
 The algorithm aims to:
@@ -55,9 +45,6 @@ The algorithm aims to:
 - Prevent stockouts on high-demand items
 - Avoid overstocking slow-moving items
 - Maintain balanced inventory based on real sales data
-
----
-
 ## License
 
 Free to use and modify.
