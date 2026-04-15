@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Torn Smart Stock
+// @name         Torn - Company Stock Smart Fill
 // @namespace    torn.toniballoni.smartstock
 // @author       Toni_Balloni [3853029]
-// @version      1.0
+// @version      1.0.1
 // @description  Intelligent stock fill system that dynamically allocates capacity based on demand, stock levels, and priority weighting.
 // @match        https://www.torn.com/companies.php*
 // @grant        none
@@ -20,12 +20,12 @@
     }
 
     function injectStyles() {
-        if (document.getElementById('win95-style')) return;
+        if (document.getElementById('tballs-smart-fill-style')) return;
 
         const style = document.createElement('style');
-        style.id = 'win95-style';
+        style.id = 'tballs-smart-fill-style';
         style.innerHTML = `
-            .win95-btn {
+            .tballs-smart-fill-btn {
                 font-family: Tahoma, Verdana, sans-serif;
                 font-size: 12px;
                 padding: 4px 12px;
@@ -41,7 +41,7 @@
                 margin-left: 10px;
             }
 
-            .win95-btn:active {
+            .tballs-smart-fill-btn:active {
                 border-top: 1px solid #404040;
                 border-left: 1px solid #404040;
                 border-right: 1px solid #ffffff;
@@ -49,7 +49,7 @@
                 box-shadow: inset 1px 1px 0px #808080;
             }
 
-            .win95-btn:hover {
+            .tballs-smart-fill-btn:hover {
                 background: #d4d0c8;
             }
         `;
@@ -58,12 +58,12 @@
 
     function injectButton() {
         const totalPriceRow = document.querySelector('.total-price');
-        if (!totalPriceRow || document.getElementById('smartFillBtn')) return;
+        if (!totalPriceRow || document.getElementById('tballs-smart-fill-btn')) return;
 
         const btn = document.createElement('button');
-        btn.id = 'smartFillBtn';
+        btn.id = 'tballs-smart-fill-btn';
         btn.innerText = 'Smart Fill';
-        btn.className = 'win95-btn';
+        btn.className = 'tballs-smart-fill-btn';
 
         btn.onclick = smartFill;
 
@@ -115,8 +115,13 @@
             const finalAmount = formatNumber(allocation);
 
             if (finalAmount > 0) {
+                d.input.focus();
                 d.input.value = finalAmount;
                 d.input.dispatchEvent(new Event('input', { bubbles: true }));
+                d.input.dispatchEvent(new Event('change', { bubbles: true }));
+                d.input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                if (window.jQuery) { window.jQuery(d.input).trigger('input').trigger('change'); }
+                d.input.blur();
                 remainingCapacity -= finalAmount;
             }
         });
