@@ -5,6 +5,8 @@
 // @version      1.0.2
 // @description  Intelligent stock fill system that dynamically allocates capacity based on demand, stock levels, and priority weighting.
 // @match        https://www.torn.com/companies.php*
+// @updateURL    https://github.com/soodohcool/torn-smart-stock/raw/refs/heads/main/torn-smart-stock.user.js
+// @downloadURL  https://github.com/soodohcool/torn-smart-stock/raw/refs/heads/main/torn-smart-stock.user.js
 // @grant        none
 // ==/UserScript==
 
@@ -102,21 +104,18 @@
 
         if (data.length === 0) return;
 
-        // --- Pass 1: Give each item what it needs, scaled by urgency weight ---
-        // Sort most urgent first so they get first refusal on limited capacity
+        // Give each item what it needs, scaled by urgency weight
         data.sort((a, b) => b.urgency - a.urgency);
 
         const totalUrgency = data.reduce((sum, d) => sum + d.urgency, 0);
 
-        // First pass: weighted ideal allocation, capped at actual need
+        // Weighted ideal allocation, capped at actual need
         data.forEach(d => {
             const idealShare = (d.urgency / totalUrgency) * remainingCapacity;
             d.allocation = Math.min(idealShare, d.need); // Never give more than needed
         });
 
-        // --- Pass 2: Redistribute leftover from capped items to still-needy ones ---
-        // Items that got less than their need because capacity ran out stay as-is;
-        // items that were capped free up space for others.
+        // Redistribute leftover from capped items to still-needy ones
         let allocated = data.reduce((sum, d) => sum + d.allocation, 0);
         let leftover  = remainingCapacity - allocated;
 
@@ -132,15 +131,13 @@
             }
         }
 
-        // --- Pass 3: Hard clamp to remaining capacity in sorted order ---
+        // Hard clamp to remaining capacity in sorted order
         let used = 0;
         data.forEach(d => {
             const room = remainingCapacity - used;
             d.allocation = Math.min(formatNumber(d.allocation), room);
             used += d.allocation;
         });
-
-        // --- Apply ---
         data.forEach(d => {
             if (d.allocation <= 0) return;
 
