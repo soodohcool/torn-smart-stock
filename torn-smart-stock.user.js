@@ -72,17 +72,32 @@
         totalPriceRow.appendChild(btn);
     }
 
+    function setInput(input, value) {
+        input.focus();
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        if (window.jQuery) { window.jQuery(input).trigger('input').trigger('change'); }
+        input.blur();
+    }
+
     function smartFill() {
         const items = document.querySelectorAll('.stock-list > li:not(.total)');
+        const TARGET_DAYS = 3; // How many days of stock to aim for per item
+        let allItems = [];
+        let needyItems = [];
+
+        // Reset all inputs so capacity reads from a clean state
+        items.forEach(li => {
+            const input = li.querySelector('input[type="text"]');
+            if (input) setInput(input, 0);
+        });
+
         const capacityCurrent = getNumber(document.querySelector('.storage-capacity .current').innerText);
         const capacityMax = getNumber(document.querySelector('.storage-capacity .max').innerText);
-
-        let remainingCapacity = capacityMax - capacityCurrent;
-        if (remainingCapacity <= 0) return;
-
-        const TARGET_DAYS = 3; // How many days of stock to aim for per item
-
-        let data = [];
+        let remaining = capacityMax - capacityCurrent;
+        if (remaining <= 0) return;
 
         items.forEach(li => {
             const stock = getNumber(li.querySelector('.stock')?.innerText || '0');
@@ -92,62 +107,64 @@
             if (!input || sold === 0) return;
 
             const daysLeft = stock / sold;
+            const priority = 1 / (daysLeft + 0.1) ** 2;
+            const item = { stock, sold, input, priority, allocation: 0 };
+            allItems.push(item);
 
-            // Skip items that already meet or exceed the target
-            if (daysLeft >= TARGET_DAYS) return;
-
-            const need    = Math.max(0, Math.ceil(sold * TARGET_DAYS - stock)); // Units to reach target
-            const urgency = TARGET_DAYS - daysLeft; // 0..TARGET_DAYS, higher = more urgent
-
-            data.push({ stock, sold, input, need, urgency, daysLeft });
+            if (daysLeft < TARGET_DAYS) {
+                item.need    = Math.max(0, Math.ceil(sold * TARGET_DAYS - stock));
+                item.urgency = TARGET_DAYS - daysLeft;
+                needyItems.push(item);
+            }
         });
 
-        if (data.length === 0) return;
+        if (allItems.length === 0) return;
 
-        // Give each item what it needs, scaled by urgency weight
-        data.sort((a, b) => b.urgency - a.urgency);
+        // Phase 1: Fill items below TARGET_DAYS up to their need, weighted by urgency
+        if (needyItems.length > 0) {
+            needyItems.sort((a, b) => b.urgency - a.urgency);
 
-        const totalUrgency = data.reduce((sum, d) => sum + d.urgency, 0);
+            let pool = remaining;
+            while (pool > 0) {
+                const eligible = needyItems.filter(d => d.allocation < d.need);
+                if (eligible.length === 0) break;
 
-        // Weighted ideal allocation, capped at actual need
-        data.forEach(d => {
-            const idealShare = (d.urgency / totalUrgency) * remainingCapacity;
-            d.allocation = Math.min(idealShare, d.need); // Never give more than needed
-        });
+                const totalUrgency = eligible.reduce((sum, d) => sum + d.urgency, 0);
+                let distributed = 0;
 
-        // Redistribute leftover from capped items to still-needy ones
-        let allocated = data.reduce((sum, d) => sum + d.allocation, 0);
-        let leftover  = remainingCapacity - allocated;
-
-        if (leftover > 1) {
-            // Only items that still have unmet need are eligible for redistribution
-            const needy = data.filter(d => d.allocation < d.need);
-            if (needy.length > 0) {
-                const needyUrgency = needy.reduce((sum, d) => sum + d.urgency, 0);
-                needy.forEach(d => {
-                    const bonus = (d.urgency / needyUrgency) * leftover;
-                    d.allocation = Math.min(d.allocation + bonus, d.need);
+                eligible.forEach(d => {
+                    const share = (d.urgency / totalUrgency) * pool;
+                    const give = Math.min(share, d.need - d.allocation);
+                    d.allocation += give;
+                    distributed += give;
                 });
+
+                if (distributed < 1) break;
+                pool = remaining - needyItems.reduce((sum, d) => sum + d.allocation, 0);
             }
         }
 
-        // Hard clamp to remaining capacity in sorted order
-        let used = 0;
-        data.forEach(d => {
-            const room = remainingCapacity - used;
-            d.allocation = Math.min(formatNumber(d.allocation), room);
-            used += d.allocation;
-        });
-        data.forEach(d => {
-            if (d.allocation <= 0) return;
+        // Phase 2: Distribute any leftover capacity proportionally by priority (fewer days = more)
+        let surplus = remaining - allItems.reduce((sum, d) => sum + d.allocation, 0);
+        if (surplus > 0) {
+            const totalPriority = allItems.reduce((sum, d) => sum + d.priority, 0);
+            allItems.forEach(d => {
+                d.allocation += (d.priority / totalPriority) * surplus;
+            });
+        }
 
-            d.input.focus();
-            d.input.value = d.allocation;
-            d.input.dispatchEvent(new Event('input', { bubbles: true }));
-            d.input.dispatchEvent(new Event('change', { bubbles: true }));
-            d.input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-            if (window.jQuery) { window.jQuery(d.input).trigger('input').trigger('change'); }
-            d.input.blur();
+        // Floor and distribute rounding remainders to highest-priority items
+        allItems.forEach(d => d.allocation = Math.floor(d.allocation));
+        let total = allItems.reduce((sum, d) => sum + d.allocation, 0);
+        let leftover = remaining - total;
+        allItems.sort((a, b) => b.priority - a.priority);
+        for (let i = 0; leftover > 0 && i < allItems.length; i++) {
+            allItems[i].allocation++;
+            leftover--;
+        }
+
+        allItems.forEach(d => {
+            if (d.allocation > 0) setInput(d.input, d.allocation);
         });
     }
 
