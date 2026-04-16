@@ -2,7 +2,7 @@
 // @name         Torn - Company Stock Smart Fill
 // @namespace    torn.toniballoni.smartstock
 // @author       Toni_Balloni [3853029]
-// @version      1.0.1
+// @version      1.0.2
 // @description  Intelligent stock fill system that dynamically allocates capacity based on demand, stock levels, and priority weighting.
 // @match        https://www.torn.com/companies.php*
 // @grant        none
@@ -78,52 +78,79 @@
         let remainingCapacity = capacityMax - capacityCurrent;
         if (remainingCapacity <= 0) return;
 
+        const TARGET_DAYS = 3; // How many days of stock to aim for per item
+
         let data = [];
 
         items.forEach(li => {
             const stock = getNumber(li.querySelector('.stock')?.innerText || '0');
-            const sold = getNumber(li.querySelector('.sold-daily')?.innerText || '0');
+            const sold  = getNumber(li.querySelector('.sold-daily')?.innerText || '0');
             const input = li.querySelector('input[type="text"]');
 
             if (!input || sold === 0) return;
 
             const daysLeft = stock / sold;
-            const priority = 1 / (daysLeft + 0.1);
 
-            data.push({
-                stock,
-                sold,
-                input,
-                priority
-            });
+            // Skip items that already meet or exceed the target
+            if (daysLeft >= TARGET_DAYS) return;
+
+            const need    = Math.max(0, Math.ceil(sold * TARGET_DAYS - stock)); // Units to reach target
+            const urgency = TARGET_DAYS - daysLeft; // 0..TARGET_DAYS, higher = more urgent
+
+            data.push({ stock, sold, input, need, urgency, daysLeft });
         });
 
-        data.sort((a, b) => b.priority - a.priority);
+        if (data.length === 0) return;
 
-        const totalPriority = data.reduce((sum, d) => sum + d.priority, 0);
+        // --- Pass 1: Give each item what it needs, scaled by urgency weight ---
+        // Sort most urgent first so they get first refusal on limited capacity
+        data.sort((a, b) => b.urgency - a.urgency);
 
+        const totalUrgency = data.reduce((sum, d) => sum + d.urgency, 0);
+
+        // First pass: weighted ideal allocation, capped at actual need
         data.forEach(d => {
-            if (remainingCapacity <= 0) return;
+            const idealShare = (d.urgency / totalUrgency) * remainingCapacity;
+            d.allocation = Math.min(idealShare, d.need); // Never give more than needed
+        });
 
-            let allocation = (d.priority / totalPriority) * remainingCapacity;
+        // --- Pass 2: Redistribute leftover from capped items to still-needy ones ---
+        // Items that got less than their need because capacity ran out stay as-is;
+        // items that were capped free up space for others.
+        let allocated = data.reduce((sum, d) => sum + d.allocation, 0);
+        let leftover  = remainingCapacity - allocated;
 
-            const neededForOneDay = Math.max(0, d.sold - d.stock);
-            allocation = Math.max(allocation, neededForOneDay);
-
-            allocation = Math.min(allocation, remainingCapacity);
-
-            const finalAmount = formatNumber(allocation);
-
-            if (finalAmount > 0) {
-                d.input.focus();
-                d.input.value = finalAmount;
-                d.input.dispatchEvent(new Event('input', { bubbles: true }));
-                d.input.dispatchEvent(new Event('change', { bubbles: true }));
-                d.input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-                if (window.jQuery) { window.jQuery(d.input).trigger('input').trigger('change'); }
-                d.input.blur();
-                remainingCapacity -= finalAmount;
+        if (leftover > 1) {
+            // Only items that still have unmet need are eligible for redistribution
+            const needy = data.filter(d => d.allocation < d.need);
+            if (needy.length > 0) {
+                const needyUrgency = needy.reduce((sum, d) => sum + d.urgency, 0);
+                needy.forEach(d => {
+                    const bonus = (d.urgency / needyUrgency) * leftover;
+                    d.allocation = Math.min(d.allocation + bonus, d.need);
+                });
             }
+        }
+
+        // --- Pass 3: Hard clamp to remaining capacity in sorted order ---
+        let used = 0;
+        data.forEach(d => {
+            const room = remainingCapacity - used;
+            d.allocation = Math.min(formatNumber(d.allocation), room);
+            used += d.allocation;
+        });
+
+        // --- Apply ---
+        data.forEach(d => {
+            if (d.allocation <= 0) return;
+
+            d.input.focus();
+            d.input.value = d.allocation;
+            d.input.dispatchEvent(new Event('input', { bubbles: true }));
+            d.input.dispatchEvent(new Event('change', { bubbles: true }));
+            d.input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+            if (window.jQuery) { window.jQuery(d.input).trigger('input').trigger('change'); }
+            d.input.blur();
         });
     }
 
