@@ -2,7 +2,7 @@
 // @name         Torn - Company Stock Smart Fill
 // @namespace    torn.toniballoni.smartstock
 // @author       Toni_Balloni [3853029]
-// @version      1.0.2
+// @version      1.0.3
 // @description  Intelligent stock fill system that dynamically allocates capacity based on demand, stock levels, and priority weighting.
 // @match        https://www.torn.com/companies.php*
 // @updateURL    https://github.com/soodohcool/torn-smart-stock/raw/refs/heads/main/torn-smart-stock.user.js
@@ -19,6 +19,31 @@
 
     function getNumber(text) {
         return parseInt(text.replace(/,/g, '').trim()) || 0;
+    }
+
+    function getStockColor(daysLeft) {
+        if (daysLeft <= 1) return '#ff3b30';      // red
+        if (daysLeft < 3)  return '#ff9500';      // orange
+        if (daysLeft < 5)  return '#ffcc00';      // yellow
+        return '#34c759';                        // green
+    }
+
+    function applyStockColors() {
+        const items = document.querySelectorAll('.stock-list > li:not(.total)');
+
+        items.forEach(li => {
+            const stockEl = li.querySelector('.stock');
+            const sold = getNumber(li.querySelector('.sold-daily')?.innerText || '0');
+            const stock = getNumber(stockEl?.innerText || '0');
+
+            if (!stockEl || sold === 0) return;
+
+            const daysLeft = stock / sold;
+
+            stockEl.style.color = getStockColor(daysLeft);
+            stockEl.style.fontWeight = 'bold';
+            stockEl.title = `${Math.floor(daysLeft.toFixed(1))} days stock remaining`;
+        });
     }
 
     function injectStyles() {
@@ -101,12 +126,19 @@
 
         items.forEach(li => {
             const stock = getNumber(li.querySelector('.stock')?.innerText || '0');
+            const stockEl = li.querySelector('.stock');
             const sold  = getNumber(li.querySelector('.sold-daily')?.innerText || '0');
             const input = li.querySelector('input[type="text"]');
 
             if (!input || sold === 0) return;
 
             const daysLeft = stock / sold;
+
+            if (stockEl) {
+                stockEl.style.color = getStockColor(daysLeft);
+                stockEl.style.fontWeight = 'bold';
+            }
+
             const priority = 1 / (daysLeft + 0.1) ** 2;
             const item = { stock, sold, input, priority, allocation: 0 };
             allItems.push(item);
@@ -166,15 +198,19 @@
         allItems.forEach(d => {
             if (d.allocation > 0) setInput(d.input, d.allocation);
         });
+
+        applyStockColors();
     }
 
     const observer = new MutationObserver(() => {
         injectStyles();
         injectButton();
+        applyStockColors();
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
 
     injectStyles();
     injectButton();
+    applyStockColors();
 })();
